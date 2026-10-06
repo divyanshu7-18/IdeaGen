@@ -200,3 +200,108 @@ class ResearchStatement(Base):
     paper: Mapped["Paper"] = sqlalchemy.orm.relationship()
     passage: Mapped[Optional["PaperPassage"]] = sqlalchemy.orm.relationship()
 
+
+class ResearchGap(Base):
+    __tablename__ = "research_gaps"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    gap_statement: Mapped[str] = mapped_column(Text)
+    research_problem: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    evidence_count: Mapped[int] = mapped_column(sqlalchemy.Integer, default=0)
+    limitations: Mapped[list] = mapped_column(JSONB, default=list)
+    future_work: Mapped[list] = mapped_column(JSONB, default=list)
+    validation_reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    validation_confidence: Mapped[Optional[float]] = mapped_column(sqlalchemy.Float, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    evidence: Mapped[list["GapEvidence"]] = sqlalchemy.orm.relationship(back_populates="gap", cascade="all, delete-orphan")
+
+
+class GapEvidence(Base):
+    __tablename__ = "gap_evidence"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    gap_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_gaps.id", ondelete="CASCADE"), index=True)
+    statement_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_statements.id", ondelete="CASCADE"), index=True)
+    paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    evidence_role: Mapped[str] = mapped_column(String(32), default="SUPPORTING")
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    gap: Mapped["ResearchGap"] = sqlalchemy.orm.relationship(back_populates="evidence")
+    statement: Mapped["ResearchStatement"] = sqlalchemy.orm.relationship()
+    paper: Mapped["Paper"] = sqlalchemy.orm.relationship()
+
+
+class ResearchOpportunityRecord(Base):
+    __tablename__ = "research_opportunities"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    gap_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_gaps.id", ondelete="CASCADE"), index=True)
+    research_problem: Mapped[str] = mapped_column(Text)
+    identified_gap: Mapped[str] = mapped_column(Text)
+    proposed_research_direction: Mapped[str] = mapped_column(Text)
+    reasoning: Mapped[str] = mapped_column(Text)
+    technical_approach: Mapped[str] = mapped_column(Text)
+    expected_contribution: Mapped[str] = mapped_column(Text)
+    feasibility: Mapped[dict] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"))
+    novelty_assessment: Mapped[dict] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"))
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    supporting_statement_ids: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    supporting_paper_ids: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    prior_art_statement_ids: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    status: Mapped[str] = mapped_column(String(64), index=True)
+
+    generation_model: Mapped[str] = mapped_column(String(255))
+    validation_model: Mapped[str] = mapped_column(String(255))
+    embedding_model: Mapped[str] = mapped_column(String(255))
+    refinement_iteration_count: Mapped[int] = mapped_column(sqlalchemy.Integer, default=0)
+    pipeline_version: Mapped[str] = mapped_column(String(32), default="v1.0")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    gap: Mapped["ResearchGap"] = sqlalchemy.orm.relationship()
+    assessments: Mapped[list["PriorArtAssessmentRecord"]] = sqlalchemy.orm.relationship(back_populates="opportunity", cascade="all, delete-orphan")
+    iterations: Mapped[list["OpportunityRefinementRecord"]] = sqlalchemy.orm.relationship(back_populates="opportunity", cascade="all, delete-orphan")
+
+
+class PriorArtAssessmentRecord(Base):
+    __tablename__ = "prior_art_assessments"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_opportunities.id", ondelete="CASCADE"), index=True)
+    iteration: Mapped[int] = mapped_column(sqlalchemy.Integer)
+    assessment: Mapped[str] = mapped_column(String(64))
+    overlapping_statement_ids: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    overlapping_paper_ids: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    reasoning: Mapped[str] = mapped_column(Text)
+    differentiation: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    opportunity: Mapped["ResearchOpportunityRecord"] = sqlalchemy.orm.relationship(back_populates="assessments")
+
+
+class OpportunityRefinementRecord(Base):
+    __tablename__ = "opportunity_refinement_iterations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_opportunities.id", ondelete="CASCADE"), index=True)
+    iteration: Mapped[int] = mapped_column(sqlalchemy.Integer)
+    original_direction: Mapped[str] = mapped_column(Text)
+    critique: Mapped[str] = mapped_column(Text)
+    revised_direction: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(64))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    opportunity: Mapped["ResearchOpportunityRecord"] = sqlalchemy.orm.relationship(back_populates="iterations")
+
+

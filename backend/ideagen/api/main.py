@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uuid
@@ -16,6 +16,7 @@ from ideagen.api.demo_service import build_demo_scenario
 from ideagen.ingestion.search import ArxivSearchProvider
 from ideagen.ingestion.pdf import ManualPDFIngestionService, PDFExtractionError
 from ideagen.understanding import PaperUnderstandingPipeline, ResearchKnowledgeResponseDTO
+from ideagen.discovery import SemanticGapDiscoveryPipeline, ResearchGapResponseDTO, GapStatus
 
 app = FastAPI(title="IdeaGen API", version="0.1.0")
 
@@ -308,4 +309,52 @@ def get_paper_statements(paper_id: uuid.UUID, db: Session = Depends(get_db)):
         }
         for s in statements
     ]
+
+
+@app.post("/api/gaps/discover", response_model=List[ResearchGapResponseDTO])
+def discover_research_gaps(db: Session = Depends(get_db)):
+    """Triggers end-to-end semantic gap discovery across all research statements."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    pipeline = SemanticGapDiscoveryPipeline(persistence=persistence)
+    try:
+        return pipeline.discover_gaps()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Discovery pipeline failed: {str(e)}")
+
+
+@app.get("/api/gaps", response_model=List[ResearchGapResponseDTO])
+def list_research_gaps(status: Optional[GapStatus] = None, db: Session = Depends(get_db)):
+    """Retrieves all discovered research gaps, optionally filtered by status."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    pipeline = SemanticGapDiscoveryPipeline(persistence=persistence)
+    return pipeline.get_gaps(status=status)
+
+
+@app.get("/api/gaps/{gap_id}", response_model=ResearchGapResponseDTO)
+def get_research_gap(gap_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Retrieves a specific research gap by ID with evidence count and details."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    gap = persistence.get_research_gap(gap_id)
+    if not gap:
+        raise HTTPException(status_code=404, detail=f"Research gap {gap_id} not found")
+
+    evidence_records = persistence.get_gap_evidence(gap_id)
+    stmt_ids = [e.statement_id for e in evidence_records]
+    paper_ids = list({e.paper_id for e in evidence_records})
+
+    return ResearchGapResponseDTO(
+        id=gap.id,
+        gap_statement=gap.gap_statement,
+        research_problem=gap.research_problem,
+        status=GapStatus(gap.status),
+        evidence_count=gap.evidence_count,
+        supporting_statement_ids=stmt_ids,
+        supporting_paper_ids=paper_ids,
+        limitations=gap.limitations or [],
+        future_work=gap.future_work or [],
+        validation_reasoning=gap.validation_reasoning,
+        validation_confidence=gap.validation_confidence,
+        created_at=gap.created_at,
+        metadata=gap.metadata_json or {},
+    )
 

@@ -190,5 +190,64 @@ class SQLAlchemyPersistenceLayer:
         stmt = select(ResearchStatement).where(ResearchStatement.paper_id == paper_id).order_by(ResearchStatement.created_at)
         return list(self.session.scalars(stmt).all())
 
+    def get_all_research_statements(self) -> list['ResearchStatement']:
+        from .models import ResearchStatement
+        stmt = select(ResearchStatement).order_by(ResearchStatement.created_at)
+        return list(self.session.scalars(stmt).all())
+
+    def save_research_gap(self, dto: 'ideagen.discovery.models.ResearchGapCreateDTO') -> uuid.UUID:
+        from .models import ResearchGap, GapEvidence
+        gap = ResearchGap(
+            gap_statement=dto.gap_statement,
+            research_problem=dto.research_problem,
+            status=dto.status.value if hasattr(dto.status, "value") else dto.status,
+            evidence_count=dto.evidence_count,
+            limitations=dto.limitations,
+            future_work=dto.future_work,
+            validation_reasoning=dto.validation_reasoning,
+            validation_confidence=dto.validation_confidence,
+            metadata_json=dto.metadata,
+        )
+
+        evidence_records = [
+            GapEvidence(
+                gap=gap,
+                statement_id=item.statement_id,
+                paper_id=item.paper_id,
+                evidence_role=item.evidence_role.value if hasattr(item.evidence_role, "value") else item.evidence_role,
+            )
+            for item in dto.evidence_items
+        ]
+
+        try:
+            self.session.add(gap)
+            self.session.add_all(evidence_records)
+            self.session.commit()
+            return gap.id
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ValueError(f"IntegrityError saving research gap: {e}")
+        except Exception as e:
+            self.session.rollback()
+            raise e
+
+    def get_research_gap(self, gap_id: uuid.UUID) -> Optional['ResearchGap']:
+        from .models import ResearchGap
+        stmt = select(ResearchGap).where(ResearchGap.id == gap_id)
+        return self.session.scalars(stmt).first()
+
+    def get_all_research_gaps(self, status: Optional[str] = None) -> list['ResearchGap']:
+        from .models import ResearchGap
+        stmt = select(ResearchGap)
+        if status:
+            stmt = stmt.where(ResearchGap.status == status)
+        stmt = stmt.order_by(ResearchGap.created_at.desc())
+        return list(self.session.scalars(stmt).all())
+
+    def get_gap_evidence(self, gap_id: uuid.UUID) -> list['GapEvidence']:
+        from .models import GapEvidence
+        stmt = select(GapEvidence).where(GapEvidence.gap_id == gap_id).order_by(GapEvidence.created_at)
+        return list(self.session.scalars(stmt).all())
+
 
 
