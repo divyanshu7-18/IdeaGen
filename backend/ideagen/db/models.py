@@ -16,7 +16,7 @@ class Paper(Base):
     
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     source_type: Mapped[str] = mapped_column(
-        ENUM(SourceType, name="source_type_enum", create_type=False)
+        String(64).with_variant(ENUM(SourceType, name="source_type_enum", create_type=False), "postgresql")
     )
     source_id: Mapped[str] = mapped_column(String, index=True)
     doi: Mapped[str] = mapped_column(String, unique=True, nullable=True)
@@ -24,9 +24,9 @@ class Paper(Base):
     publication_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     batch_id: Mapped[str] = mapped_column(String, index=True)
     abstract: Mapped[str] = mapped_column(Text)
-    authors: Mapped[list] = mapped_column(JSONB)
-    referenced_works: Mapped[list] = mapped_column(JSONB)
-    raw_metadata: Mapped[dict] = mapped_column(JSONB)
+    authors: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"))
+    referenced_works: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"))
+    raw_metadata: Mapped[dict] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"))
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -61,7 +61,7 @@ class PaperDocument(Base):
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True, nullable=True)
     original_filename: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     acquisition_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    provenance_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    provenance_metadata: Mapped[Optional[dict]] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -101,7 +101,7 @@ class Opportunity(Base):
     problem_statement: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
-        ENUM(OpportunityStatus, name="opportunity_status_enum", create_type=False)
+        String(64).with_variant(ENUM(OpportunityStatus, name="opportunity_status_enum", create_type=False), "postgresql")
     )
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     
@@ -122,7 +122,7 @@ class OpportunityEvidence(Base):
     opportunity_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
     paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="RESTRICT"), index=True)
     evidence_type: Mapped[str] = mapped_column(
-        ENUM(OpportunityRelationship, name="opportunity_relationship_enum", create_type=False)
+        String(64).with_variant(ENUM(OpportunityRelationship, name="opportunity_relationship_enum", create_type=False), "postgresql")
     )
     supporting_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
@@ -136,13 +136,13 @@ class OpportunityHistory(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     opportunity_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
     previous_status: Mapped[str] = mapped_column(
-        ENUM(OpportunityStatus, name="opportunity_status_enum", create_type=False)
+        String(64).with_variant(ENUM(OpportunityStatus, name="opportunity_status_enum", create_type=False), "postgresql")
     )
     new_status: Mapped[str] = mapped_column(
-        ENUM(OpportunityStatus, name="opportunity_status_enum", create_type=False)
+        String(64).with_variant(ENUM(OpportunityStatus, name="opportunity_status_enum", create_type=False), "postgresql")
     )
     trigger_type: Mapped[str] = mapped_column(
-        ENUM(OpportunityRelationship, name="opportunity_relationship_enum", create_type=False)
+        String(64).with_variant(ENUM(OpportunityRelationship, name="opportunity_relationship_enum", create_type=False), "postgresql")
     )
     evidence_id: Mapped[Optional[uuid.UUID]] = mapped_column(sqlalchemy.ForeignKey("opportunity_evidence.id", ondelete="SET NULL"), nullable=True)
     
@@ -157,12 +157,12 @@ class ResearchKnowledge(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="CASCADE"), unique=True, index=True)
     research_problem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    research_questions: Mapped[list] = mapped_column(JSONB, default=list)
+    research_questions: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
     methodology: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    datasets: Mapped[list] = mapped_column(JSONB, default=list)
-    findings: Mapped[list] = mapped_column(JSONB, default=list)
-    limitations: Mapped[list] = mapped_column(JSONB, default=list)
-    future_work: Mapped[list] = mapped_column(JSONB, default=list)
+    datasets: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    findings: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    limitations: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    future_work: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
 
     model_name: Mapped[str] = mapped_column(String(255))
     model_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -170,7 +170,7 @@ class ResearchKnowledge(Base):
     extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     extraction_status: Mapped[str] = mapped_column(String(32), default="SUCCESS")
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -192,7 +192,7 @@ class ResearchStatement(Base):
     page_end: Mapped[Optional[int]] = mapped_column(sqlalchemy.Integer, nullable=True)
     section: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     confidence: Mapped[Optional[float]] = mapped_column(sqlalchemy.Float, nullable=True)
-    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -209,11 +209,11 @@ class ResearchGap(Base):
     research_problem: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), index=True)
     evidence_count: Mapped[int] = mapped_column(sqlalchemy.Integer, default=0)
-    limitations: Mapped[list] = mapped_column(JSONB, default=list)
-    future_work: Mapped[list] = mapped_column(JSONB, default=list)
+    limitations: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
+    future_work: Mapped[list] = mapped_column(JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=list)
     validation_reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     validation_confidence: Mapped[Optional[float]] = mapped_column(sqlalchemy.Float, nullable=True)
-    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -229,7 +229,7 @@ class GapEvidence(Base):
     statement_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_statements.id", ondelete="CASCADE"), index=True)
     paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="CASCADE"), index=True)
     evidence_role: Mapped[str] = mapped_column(String(32), default="SUPPORTING")
-    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB().with_variant(sqlalchemy.JSON, "sqlite"), default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

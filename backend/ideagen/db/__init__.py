@@ -12,6 +12,9 @@ from .models import (
     Opportunity,
     OpportunityEvidence,
     OpportunityHistory,
+    ResearchOpportunityRecord,
+    PriorArtAssessmentRecord,
+    OpportunityRefinementRecord,
 )
 from .persistence import SQLAlchemyPersistenceLayer
 from .session import engine, SessionLocal, get_db
@@ -28,8 +31,12 @@ __all__ = [
     "Opportunity",
     "OpportunityEvidence",
     "OpportunityHistory",
+    "ResearchOpportunityRecord",
+    "PriorArtAssessmentRecord",
+    "OpportunityRefinementRecord",
     "SQLAlchemyPersistenceLayer",
     "engine",
     "SessionLocal",
     "get_db",
 ]
+
