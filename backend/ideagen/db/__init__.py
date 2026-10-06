@@ -1,6 +1,16 @@
 """Database and persistence layer."""
 
-from .models import Base, Paper, PaperDocument, PaperPassage, Opportunity, OpportunityEvidence, OpportunityHistory
+from .models import (
+    Base,
+    Paper,
+    PaperDocument,
+    PaperPassage,
+    ResearchKnowledge,
+    ResearchStatement,
+    Opportunity,
+    OpportunityEvidence,
+    OpportunityHistory,
+)
 from .persistence import SQLAlchemyPersistenceLayer
 from .session import engine, SessionLocal, get_db
 
@@ -9,6 +19,8 @@ __all__ = [
     "Paper",
     "PaperDocument",
     "PaperPassage",
+    "ResearchKnowledge",
+    "ResearchStatement",
     "Opportunity",
     "OpportunityEvidence",
     "OpportunityHistory",

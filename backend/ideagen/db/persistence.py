@@ -115,5 +115,80 @@ class SQLAlchemyPersistenceLayer:
         stmt = select(PaperPassage).where(PaperPassage.document_id == document_id).order_by(PaperPassage.passage_index)
         return list(self.session.scalars(stmt).all())
 
+    def get_passages_by_paper(self, paper_id: uuid.UUID) -> list['PaperPassage']:
+        from .models import PaperPassage
+        stmt = select(PaperPassage).where(PaperPassage.paper_id == paper_id).order_by(PaperPassage.passage_index)
+        return list(self.session.scalars(stmt).all())
+
+    def save_research_knowledge(self, dto: 'ideagen.understanding.models.ResearchKnowledgeCreateDTO') -> uuid.UUID:
+        from .models import ResearchKnowledge, ResearchStatement
+        # Check if record already exists for this paper
+        existing = self.session.query(ResearchKnowledge).filter_by(paper_id=dto.paper_id).first()
+        if existing:
+            # Delete existing knowledge and cascade statements
+            self.session.delete(existing)
+            self.session.flush()
+
+        knowledge = ResearchKnowledge(
+            paper_id=dto.paper_id,
+            research_problem=dto.research_problem,
+            research_questions=dto.research_questions,
+            methodology=dto.methodology,
+            datasets=dto.datasets,
+            findings=dto.findings,
+            limitations=dto.limitations,
+            future_work=dto.future_work,
+            model_name=dto.model_name,
+            model_version=dto.model_version,
+            extraction_schema_version=dto.extraction_schema_version,
+            extracted_at=dto.extracted_at,
+            extraction_status=dto.extraction_status.value if hasattr(dto.extraction_status, 'value') else dto.extraction_status,
+            error_message=dto.error_message,
+            metadata_json=dto.metadata,
+        )
+
+        statements = [
+            ResearchStatement(
+                knowledge=knowledge,
+                paper_id=dto.paper_id,
+                passage_id=stmt_dto.source_passage_id,
+                statement_text=stmt_dto.statement_text,
+                statement_type=stmt_dto.statement_type.value if hasattr(stmt_dto.statement_type, 'value') else stmt_dto.statement_type,
+                page_start=stmt_dto.source_page_start,
+                page_end=stmt_dto.source_page_end,
+                section=stmt_dto.section,
+                confidence=stmt_dto.confidence,
+                metadata_json=stmt_dto.metadata,
+            )
+            for stmt_dto in dto.research_statements
+        ]
+
+        try:
+            self.session.add(knowledge)
+            self.session.add_all(statements)
+            self.session.commit()
+            return knowledge.id
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ValueError(f"IntegrityError saving research knowledge: {e}")
+        except Exception as e:
+            self.session.rollback()
+            raise e
+
+    def get_research_knowledge_by_paper(self, paper_id: uuid.UUID) -> Optional['ResearchKnowledge']:
+        from .models import ResearchKnowledge
+        stmt = select(ResearchKnowledge).where(ResearchKnowledge.paper_id == paper_id)
+        return self.session.scalars(stmt).first()
+
+    def get_statements_by_knowledge(self, knowledge_id: uuid.UUID) -> list['ResearchStatement']:
+        from .models import ResearchStatement
+        stmt = select(ResearchStatement).where(ResearchStatement.knowledge_id == knowledge_id).order_by(ResearchStatement.created_at)
+        return list(self.session.scalars(stmt).all())
+
+    def get_statements_by_paper(self, paper_id: uuid.UUID) -> list['ResearchStatement']:
+        from .models import ResearchStatement
+        stmt = select(ResearchStatement).where(ResearchStatement.paper_id == paper_id).order_by(ResearchStatement.created_at)
+        return list(self.session.scalars(stmt).all())
+
 
 

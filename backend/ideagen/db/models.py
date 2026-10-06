@@ -47,6 +47,7 @@ class Paper(Base):
     )
     
     documents: Mapped[list["PaperDocument"]] = sqlalchemy.orm.relationship(back_populates="paper", cascade="all, delete-orphan")
+    research_knowledge: Mapped[Optional["ResearchKnowledge"]] = sqlalchemy.orm.relationship(back_populates="paper", cascade="all, delete-orphan", uselist=False)
 
 class PaperDocument(Base):
     __tablename__ = "paper_documents"
@@ -148,4 +149,54 @@ class OpportunityHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     opportunity: Mapped["Opportunity"] = relationship(back_populates="history")
+
+
+class ResearchKnowledge(Base):
+    __tablename__ = "research_knowledge"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="CASCADE"), unique=True, index=True)
+    research_problem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    research_questions: Mapped[list] = mapped_column(JSONB, default=list)
+    methodology: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    datasets: Mapped[list] = mapped_column(JSONB, default=list)
+    findings: Mapped[list] = mapped_column(JSONB, default=list)
+    limitations: Mapped[list] = mapped_column(JSONB, default=list)
+    future_work: Mapped[list] = mapped_column(JSONB, default=list)
+
+    model_name: Mapped[str] = mapped_column(String(255))
+    model_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    extraction_schema_version: Mapped[str] = mapped_column(String(32), default="v1.0")
+    extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    extraction_status: Mapped[str] = mapped_column(String(32), default="SUCCESS")
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    paper: Mapped["Paper"] = sqlalchemy.orm.relationship(back_populates="research_knowledge")
+    statements: Mapped[list["ResearchStatement"]] = sqlalchemy.orm.relationship(back_populates="knowledge", cascade="all, delete-orphan", order_by="ResearchStatement.created_at")
+
+
+class ResearchStatement(Base):
+    __tablename__ = "research_statements"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    knowledge_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("research_knowledge.id", ondelete="CASCADE"), index=True)
+    paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    passage_id: Mapped[Optional[uuid.UUID]] = mapped_column(sqlalchemy.ForeignKey("paper_passages.id", ondelete="SET NULL"), nullable=True, index=True)
+    statement_text: Mapped[str] = mapped_column(Text)
+    statement_type: Mapped[str] = mapped_column(String(64), index=True)
+    page_start: Mapped[Optional[int]] = mapped_column(sqlalchemy.Integer, nullable=True)
+    page_end: Mapped[Optional[int]] = mapped_column(sqlalchemy.Integer, nullable=True)
+    section: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(sqlalchemy.Float, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    knowledge: Mapped["ResearchKnowledge"] = sqlalchemy.orm.relationship(back_populates="statements")
+    paper: Mapped["Paper"] = sqlalchemy.orm.relationship()
+    passage: Mapped[Optional["PaperPassage"]] = sqlalchemy.orm.relationship()
 

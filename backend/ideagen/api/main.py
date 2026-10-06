@@ -15,6 +15,7 @@ from ideagen.api.schema import DemoScenarioResponse, DemoOpportunityOverview, Se
 from ideagen.api.demo_service import build_demo_scenario
 from ideagen.ingestion.search import ArxivSearchProvider
 from ideagen.ingestion.pdf import ManualPDFIngestionService, PDFExtractionError
+from ideagen.understanding import PaperUnderstandingPipeline, ResearchKnowledgeResponseDTO
 
 app = FastAPI(title="IdeaGen API", version="0.1.0")
 
@@ -260,4 +261,51 @@ async def upload_papers(files: List[UploadFile] = File(...), db: Session = Depen
         count=len(results),
         papers=[r.model_dump() for r in results]
     )
+
+
+@app.post("/api/papers/{paper_id}/understand", response_model=ResearchKnowledgeResponseDTO)
+def understand_paper(paper_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Triggers AI paper understanding pipeline on an ingested paper."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    pipeline = PaperUnderstandingPipeline(persistence=persistence)
+    try:
+        return pipeline.understand_paper(paper_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Understanding pipeline failed: {str(e)}")
+
+
+@app.get("/api/papers/{paper_id}/knowledge", response_model=ResearchKnowledgeResponseDTO)
+def get_paper_knowledge(paper_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Retrieves extracted research knowledge for a paper."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    pipeline = PaperUnderstandingPipeline(persistence=persistence)
+    knowledge = pipeline.get_paper_knowledge(paper_id)
+    if not knowledge:
+        raise HTTPException(status_code=404, detail=f"No research knowledge found for paper {paper_id}")
+    return knowledge
+
+
+@app.get("/api/papers/{paper_id}/statements")
+def get_paper_statements(paper_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Retrieves all grounded research statements with provenance for a paper."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    statements = persistence.get_statements_by_paper(paper_id)
+    return [
+        {
+            "id": str(s.id),
+            "paper_id": str(s.paper_id),
+            "passage_id": str(s.passage_id) if s.passage_id else None,
+            "statement_text": s.statement_text,
+            "statement_type": s.statement_type,
+            "page_start": s.page_start,
+            "page_end": s.page_end,
+            "section": s.section,
+            "confidence": s.confidence,
+            "metadata": s.metadata_json or {},
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+        for s in statements
+    ]
 
