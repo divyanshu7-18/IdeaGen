@@ -46,23 +46,74 @@ class SQLAlchemyPersistenceLayer:
             self.session.rollback()
             raise e
 
-    def save_paper_document(self, doc_dto: 'ideagen.ingestion.models.PaperDocumentCreateDTO') -> None:
+    def document_exists_by_hash(self, content_hash: str) -> bool:
+        if not content_hash:
+            return False
+        from .models import PaperDocument
+        stmt = select(PaperDocument.id).where(PaperDocument.content_hash == content_hash)
+        return self.session.scalar(stmt) is not None
+
+    def get_document_by_hash(self, content_hash: str) -> Optional['PaperDocument']:
+        if not content_hash:
+            return None
+        from .models import PaperDocument
+        stmt = select(PaperDocument).where(PaperDocument.content_hash == content_hash)
+        return self.session.scalar(stmt)
+
+    def save_paper_document(self, doc_dto: 'ideagen.ingestion.models.PaperDocumentCreateDTO') -> uuid.UUID:
         from .models import PaperDocument
         doc = PaperDocument(
             paper_id=doc_dto.paper_id,
             full_text=doc_dto.full_text,
             extraction_method=doc_dto.extraction_method,
             extraction_version=doc_dto.extraction_version,
-            extracted_at=doc_dto.extracted_at
+            extracted_at=doc_dto.extracted_at,
+            content_hash=getattr(doc_dto, "content_hash", None),
+            original_filename=getattr(doc_dto, "original_filename", None),
+            acquisition_timestamp=getattr(doc_dto, "acquisition_timestamp", None),
+            provenance_metadata=getattr(doc_dto, "provenance_metadata", None),
         )
         try:
             self.session.add(doc)
             self.session.commit()
+            return doc.id
         except IntegrityError as e:
             self.session.rollback()
             raise ValueError(f"IntegrityError saving paper document: {e}")
         except Exception as e:
             self.session.rollback()
             raise e
+
+    def save_passages(self, passage_dtos: list['ideagen.ingestion.models.PassageCreateDTO']) -> None:
+        if not passage_dtos:
+            return
+        from .models import PaperPassage
+        passages = [
+            PaperPassage(
+                paper_id=dto.paper_id,
+                document_id=dto.document_id,
+                passage_index=dto.passage_index,
+                page_start=dto.page_start,
+                page_end=dto.page_end,
+                section=dto.section,
+                text=dto.text,
+            )
+            for dto in passage_dtos
+        ]
+        try:
+            self.session.add_all(passages)
+            self.session.commit()
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ValueError(f"IntegrityError saving paper passages: {e}")
+        except Exception as e:
+            self.session.rollback()
+            raise e
+
+    def get_passages_by_document(self, document_id: uuid.UUID) -> list['PaperPassage']:
+        from .models import PaperPassage
+        stmt = select(PaperPassage).where(PaperPassage.document_id == document_id).order_by(PaperPassage.passage_index)
+        return list(self.session.scalars(stmt).all())
+
 
 

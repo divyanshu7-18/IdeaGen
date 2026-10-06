@@ -20,7 +20,7 @@ class Paper(Base):
     )
     source_id: Mapped[str] = mapped_column(String, index=True)
     doi: Mapped[str] = mapped_column(String, unique=True, nullable=True)
-    title: Mapped[str] = mapped_column(String)
+    title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     publication_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     batch_id: Mapped[str] = mapped_column(String, index=True)
     abstract: Mapped[str] = mapped_column(Text)
@@ -57,11 +57,37 @@ class PaperDocument(Base):
     extraction_method: Mapped[str] = mapped_column(String)
     extraction_version: Mapped[str] = mapped_column(String)
     extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    content_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True, nullable=True)
+    original_filename: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    acquisition_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    provenance_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     paper: Mapped["Paper"] = sqlalchemy.orm.relationship(back_populates="documents")
+    passages: Mapped[list["PaperPassage"]] = sqlalchemy.orm.relationship(back_populates="document", cascade="all, delete-orphan", order_by="PaperPassage.passage_index")
+
+class PaperPassage(Base):
+    __tablename__ = "paper_passages"
+    
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    paper_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    document_id: Mapped[uuid.UUID] = mapped_column(sqlalchemy.ForeignKey("paper_documents.id", ondelete="CASCADE"), index=True)
+    passage_index: Mapped[int] = mapped_column(sqlalchemy.Integer)
+    page_start: Mapped[int] = mapped_column(sqlalchemy.Integer)
+    page_end: Mapped[int] = mapped_column(sqlalchemy.Integer)
+    section: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    text: Mapped[str] = mapped_column(Text)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    __table_args__ = (
+        Index('idx_passage_doc_order', 'document_id', 'passage_index'),
+    )
+    
+    document: Mapped["PaperDocument"] = sqlalchemy.orm.relationship(back_populates="passages")
+    paper: Mapped["Paper"] = sqlalchemy.orm.relationship()
 
 from ideagen.opportunity.models import OpportunityStatus, OpportunityRelationship
 from sqlalchemy import Float, CheckConstraint

@@ -100,6 +100,26 @@ def analyze_search_papers(req: AnalyzeRequest):
     return build_demo_scenario(custom_raw_papers=raw_papers)
 
 
+@app.get("/api/documents/{document_id}/passages")
+def get_document_passages(document_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Retrieves all deterministic passages for an ingested document."""
+    persistence = SQLAlchemyPersistenceLayer(db)
+    passages = persistence.get_passages_by_document(document_id)
+    return [
+        {
+            "id": str(p.id),
+            "paper_id": str(p.paper_id),
+            "document_id": str(p.document_id),
+            "passage_index": p.passage_index,
+            "page_start": p.page_start,
+            "page_end": p.page_end,
+            "section": p.section,
+            "text": p.text,
+        }
+        for p in passages
+    ]
+
+
 @app.post("/api/papers/upload", response_model=SearchResponse)
 async def upload_papers(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
     if len(files) > 20:
@@ -121,9 +141,32 @@ async def upload_papers(files: List[UploadFile] = File(...), db: Session = Depen
             
         try:
             extracted_text = service.extract_text(tmp_path)
+            content_hash = service.compute_sha256(tmp_path)
+            
+            # Check if this exact PDF content was already ingested
+            if persistence.document_exists_by_hash(content_hash):
+                # Duplicate detected: avoid creating duplicate document representation
+                existing_doc = persistence.get_document_by_hash(content_hash)
+                if existing_doc and existing_doc.paper:
+                    p = existing_doc.paper
+                    results.append(SearchResultPaper(
+                        id=f"W{p.id.hex[:10]}",
+                        source="UPLOAD",
+                        title=p.title or file.filename,
+                        authors=p.authors or [],
+                        publication_year=p.publication_date.year if p.publication_date else datetime.date.today().year,
+                        publication_date=p.publication_date.isoformat() if p.publication_date else datetime.date.today().isoformat(),
+                        abstract=p.abstract,
+                        url=None,
+                        doi=p.doi,
+                        raw_metadata=p.raw_metadata or {}
+                    ))
+                    continue
+
             abstract = extracted_text[:1000]
             unique_source_id = f"upload_{uuid.uuid4().hex}"
             pub_date = datetime.date.today()
+            now_ts = datetime.datetime.now(datetime.timezone.utc)
             
             # Persist to PostgreSQL database
             paper_dto = PaperCreateDTO(
@@ -135,7 +178,10 @@ async def upload_papers(files: List[UploadFile] = File(...), db: Session = Depen
                 abstract=abstract,
                 authors=[],
                 referenced_works=[],
-                raw_metadata={"original_filename": file.filename}
+                raw_metadata={
+                    "original_filename": file.filename,
+                    "content_hash": content_hash,
+                }
             )
             saved_id = persistence.save_paper(paper_dto)
             
@@ -144,9 +190,37 @@ async def upload_papers(files: List[UploadFile] = File(...), db: Session = Depen
                 full_text=extracted_text,
                 extraction_method=service.extraction_method,
                 extraction_version=service.extraction_version,
-                extracted_at=datetime.datetime.now(datetime.timezone.utc)
+                extracted_at=now_ts,
+                content_hash=content_hash,
+                original_filename=file.filename,
+                acquisition_timestamp=now_ts,
+                provenance_metadata={
+                    "source_type": SourceType.MANUAL_UPLOAD.value,
+                    "source_id": unique_source_id,
+                    "content_hash": content_hash,
+                    "original_filename": file.filename,
+                    "extraction_version": service.extraction_version,
+                }
             )
-            persistence.save_paper_document(doc_dto)
+            saved_doc_id = persistence.save_paper_document(doc_dto)
+            
+            # Extract structured blocks and create passages
+            try:
+                _, block_units = service.extract_structured(tmp_path)
+            except Exception:
+                from ideagen.ingestion.passage_chunker import BlockUnit
+                block_units = [
+                    BlockUnit(text=p.strip(), page_number=1, section=None)
+                    for p in extracted_text.split("\n\n")
+                    if p.strip()
+                ]
+
+            passages = service.chunker.create_passages(
+                blocks=block_units,
+                paper_id=saved_id,
+                document_id=saved_doc_id,
+            )
+            persistence.save_passages(passages)
             
             paper_id_str = f"W{saved_id.hex[:10]}"
             res = SearchResultPaper(
@@ -165,7 +239,8 @@ async def upload_papers(files: List[UploadFile] = File(...), db: Session = Depen
                     "publication_date": pub_date.isoformat(),
                     "publication_year": pub_date.year,
                     "doi": None,
-                    "abstract": abstract
+                    "abstract": abstract,
+                    "content_hash": content_hash,
                 }
             )
             results.append(res)
