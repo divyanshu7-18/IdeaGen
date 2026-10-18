@@ -4,7 +4,6 @@ def evaluate_classifier_engineering() -> EvaluationResult:
     """
     Records the Phase 5.4.1 offline classifier result.
     This is a CONTROLLED PROTOTYPE metric using FakeLLMProvider.
-    It does NOT represent a real Gemini benchmark.
     """
     return EvaluationResult(
         evaluation_name="relationship_classifier_offline_fixture",
@@ -19,6 +18,6 @@ def evaluate_classifier_engineering() -> EvaluationResult:
         },
         denominators={"total_examples": 25},
         errors=[],
-        limitations="CONTROLLED OFFLINE FIXTURE. Offline classifier evaluation using FakeLLMProvider due to Gemini quota limits. NOT a Gemini benchmark.",
+        limitations="CONTROLLED OFFLINE FIXTURE. Offline classifier evaluation using FakeLLMProvider.",
         is_engineering_validation=False
     )

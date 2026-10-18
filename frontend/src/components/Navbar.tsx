@@ -1,73 +1,163 @@
 import React from 'react';
-import { Sparkles, BookOpen, GitFork, Lightbulb, BarChart3, FlaskConical } from 'lucide-react';
+import { 
+  Home,
+  FileSearch,
+  Database,
+  Share2,
+  Lightbulb, 
+  FileText, 
+  BarChart2,
+  Settings,
+  HelpCircle,
+  X
+} from 'lucide-react';
 
-export type TabView = 'overview' | 'literature' | 'landscape' | 'gaps' | 'opportunities' | 'evaluation';
+export type TabView = 
+  | 'overview'
+  | 'search' 
+  | 'workspace' 
+  | 'knowledge' 
+  | 'gaps' 
+  | 'opportunities' 
+  | 'reports' 
+  | 'evaluation';
 
 interface NavbarProps {
   currentTab: TabView;
   onSelectTab: (tab: TabView) => void;
+  workspaceCount?: number;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
-  const navItems: { id: TabView; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" /> },
-    { id: 'literature', label: 'Literature', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'landscape', label: 'Research Landscape', icon: <GitFork className="w-4 h-4" /> },
-    { id: 'gaps', label: 'Research Gaps', icon: <Sparkles className="w-4 h-4" /> },
-    { id: 'opportunities', label: 'Opportunity Studio', icon: <Lightbulb className="w-4 h-4" /> },
-    { id: 'evaluation', label: 'Evaluation', icon: <FlaskConical className="w-4 h-4 text-slate-400" /> },
+export const Navbar: React.FC<NavbarProps> = ({ 
+  currentTab, 
+  onSelectTab, 
+  mobileOpen = false,
+  onCloseMobile 
+}) => {
+  const navItems = [
+    { id: 'overview' as TabView, label: 'Overview', icon: Home },
+    { id: 'search' as TabView, label: 'Literature Search', icon: FileSearch },
+    { id: 'knowledge' as TabView, label: 'Research Knowledge', icon: Database },
+    { id: 'gaps' as TabView, label: 'Gap Discovery', icon: Share2 },
+    { id: 'opportunities' as TabView, label: 'Opportunities', icon: Lightbulb },
+    { id: 'reports' as TabView, label: 'Reports', icon: FileText },
+    { id: 'evaluation' as TabView, label: 'Evaluation', icon: BarChart2 },
   ];
 
-  return (
-    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        
-        {/* Brand logo */}
-        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onSelectTab('overview')}>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-lg tracking-tight text-white">IdeaGen</span>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-semibold">
-                v2.0
+  const handleTabClick = (tabId: TabView) => {
+    onSelectTab(tabId);
+    if (onCloseMobile) onCloseMobile();
+  };
+
+  const sidebarContent = (
+    <div 
+      className="h-full flex flex-col justify-between bg-white border-r border-[#EAE7F2] select-none py-6 px-4 shrink-0"
+      style={{ width: '240px', minWidth: '240px', maxWidth: '240px' }}
+    >
+      {/* Brand Header */}
+      <div>
+        <div className="flex items-center justify-between px-2 mb-8">
+          <div 
+            onClick={() => handleTabClick('overview')}
+            className="cursor-pointer flex items-center space-x-3 group"
+          >
+            {/* Glowing Logo matching screenshot */}
+            <div className="w-10 h-10 rounded-xl bg-[#EEE8FF] flex items-center justify-center text-[#6C4CE3] relative shadow-xs shrink-0">
+              <Lightbulb className="w-5 h-5 text-[#6C4CE3]" />
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#6C4CE3] animate-pulse" />
+            </div>
+            <div>
+              <span className="font-bold text-[#20233A] tracking-tight text-lg block leading-tight">
+                IdeaGen
+              </span>
+              <span className="text-[11px] text-[#777B91] font-medium block leading-tight mt-0.5 whitespace-nowrap">
+                From Literature to Ideas
               </span>
             </div>
-            <span className="text-[11px] text-slate-400 block -mt-1 font-sans">
-              Evidence-Grounded Research Discovery
-            </span>
           </div>
+
+          {/* Mobile close button */}
+          {onCloseMobile && (
+            <button 
+              onClick={onCloseMobile}
+              className="lg:hidden text-[#777B91] hover:text-[#20233A] p-1 rounded-md"
+              aria-label="Close navigation menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex space-x-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800/80">
+        {/* Navigation Links */}
+        <nav className="space-y-1.5" aria-label="Main Navigation">
           {navItems.map((item) => {
-            const active = currentTab === item.id;
+            const Icon = item.icon;
+            const isActive = currentTab === item.id;
+
             return (
               <button
                 key={item.id}
-                onClick={() => onSelectTab(item.id)}
-                className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  active
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                onClick={() => handleTabClick(item.id)}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-[#EEE8FF] text-[#6C4CE3] font-semibold shadow-xs'
+                    : 'text-[#777B91] hover:bg-[#F8F6FD] hover:text-[#20233A]'
                 }`}
               >
-                {item.icon}
-                <span>{item.label}</span>
+                <Icon className={`w-4 h-4 shrink-0 transition-colors ${
+                  isActive ? 'text-[#6C4CE3]' : 'text-[#777B91]'
+                }`} />
+                <span className="whitespace-nowrap text-left">{item.label}</span>
               </button>
             );
           })}
         </nav>
-
-        {/* System Status indicator */}
-        <div className="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/40 px-3 py-1.5 rounded-full border border-emerald-800/40 font-mono">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Pipeline Ready</span>
-        </div>
-
       </div>
-    </header>
+
+      {/* Bottom Auxiliary Links matching reference */}
+      <div className="pt-6 border-t border-[#EAE7F2] space-y-1">
+        <button
+          onClick={() => alert("IdeaGen v1.0 • Settings configured via environment (.env)")}
+          className="w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-[13px] font-medium text-[#777B91] hover:bg-[#F8F6FD] hover:text-[#20233A] transition-colors"
+        >
+          <Settings className="w-4 h-4 text-[#777B91] shrink-0" />
+          <span>Settings</span>
+        </button>
+        <button
+          onClick={() => window.open("https://github.com/IdeaGen", "_blank")}
+          className="w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-[13px] font-medium text-[#777B91] hover:bg-[#F8F6FD] hover:text-[#20233A] transition-colors"
+        >
+          <HelpCircle className="w-4 h-4 text-[#777B91] shrink-0" />
+          <span>Help</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <aside 
+        className="hidden lg:block shrink-0 sticky top-0 h-screen z-30"
+        style={{ width: '240px', minWidth: '240px', maxWidth: '240px' }}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer Navigation */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" 
+            onClick={onCloseMobile} 
+          />
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white z-10 shadow-2xl animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

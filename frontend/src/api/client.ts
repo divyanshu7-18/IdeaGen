@@ -7,6 +7,9 @@ import type {
   OpportunityResponse,
   OpportunityReport,
   EvidenceDetail,
+  FullEvaluationReport,
+  SearchResultPaper,
+  SearchResponse,
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -28,6 +31,25 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const api = {
+  async searchPapers(query: string, limit = 10): Promise<SearchResponse> {
+    const res = await fetch(`/api/search/papers?q=${encodeURIComponent(query)}&limit=${limit}`);
+    return handleResponse<SearchResponse>(res);
+  },
+
+  async ingestSearchPaper(paper: SearchResultPaper): Promise<PaperResponse> {
+    const res = await fetch('/api/papers/ingest_search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paper),
+    });
+    return handleResponse<PaperResponse>(res);
+  },
+
+  async understandPaper(paperId: string): Promise<ResearchKnowledgeResponse> {
+    const res = await fetch(`/api/papers/${paperId}/understand`, { method: 'POST' });
+    return handleResponse<ResearchKnowledgeResponse>(res);
+  },
+
   async getStats(): Promise<WorkspaceStats> {
     const res = await fetch(`${API_BASE}/stats`);
     return handleResponse<WorkspaceStats>(res);
@@ -43,8 +65,9 @@ export const api = {
     return handleResponse<PaperResponse>(res);
   },
 
+
   async getPaperKnowledge(paperId: string): Promise<ResearchKnowledgeResponse> {
-    const res = await fetch(`${API_BASE}/papers/${paperId}/knowledge`);
+    const res = await fetch(`/api/papers/${paperId}/knowledge`);
     return handleResponse<ResearchKnowledgeResponse>(res);
   },
 
@@ -74,7 +97,7 @@ export const api = {
   },
 
   async discoverGaps(): Promise<{ status: string; gaps_discovered: number }> {
-    const res = await fetch(`${API_BASE}/gaps/discover`, { method: 'POST' });
+    const res = await fetch('/api/gaps/discover', { method: 'POST' });
     return handleResponse(res);
   },
 
@@ -94,7 +117,12 @@ export const api = {
   },
 
   async generateOpportunity(gapId: string): Promise<OpportunityResponse> {
-    const res = await fetch(`${API_BASE}/opportunities/generate/${gapId}`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/gaps/${gapId}/opportunity`, { method: 'POST' });
     return handleResponse<OpportunityResponse>(res);
+  },
+
+  async getEvaluationResults(): Promise<FullEvaluationReport> {
+    const res = await fetch(`${API_BASE}/evaluation/results`);
+    return handleResponse<FullEvaluationReport>(res);
   },
 };

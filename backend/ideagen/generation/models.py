@@ -15,6 +15,7 @@ class OpportunityStatus(str, enum.Enum):
     REFINED = "REFINED"
     REJECTED_INSUFFICIENTLY_DIFFERENTIATED = "REJECTED_INSUFFICIENTLY_DIFFERENTIATED"
     INSUFFICIENTLY_DIFFERENTIATED = "INSUFFICIENTLY_DIFFERENTIATED"
+    REJECTED = "REJECTED"
 
 
 class FeasibilityAssessment(BaseModel):
@@ -100,8 +101,8 @@ class ResearchOpportunityDTO(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Reproducibility metadata
-    generation_model: str = "gemini-2.5-flash"
-    validation_model: str = "gemini-2.5-flash"
-    embedding_model: str = "gemini-embedding-001"
+    generation_model: str = "qwen3:8b"
+    validation_model: str = "qwen3:8b"
+    embedding_model: str = "nomic-embed-text"
     refinement_iteration_count: int = 0
     pipeline_version: str = "v1.0"

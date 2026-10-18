@@ -6,7 +6,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from ideagen.core.config import get_settings
-from ideagen.llm.gemini_provider import GeminiLLMProvider
+from ideagen.llm.ollama_provider import OllamaLLMProvider
 from tests.opportunity.fake_provider import FakeLLMProvider
 from ideagen.opportunity.classifier import RelationshipClassifier, RelationshipClassificationInput, RelationshipClassification
 from ideagen.llm.exceptions import ProviderFailureError, MalformedResponseError
@@ -14,11 +14,6 @@ from ideagen.opportunity.models import OpportunityRelationship
 
 def main():
     settings = get_settings()
-    api_key = settings.gemini_api_key
-    if not api_key:
-        print("Error: GEMINI_API_KEY is not set.")
-        sys.exit(1)
-
     fixtures_path = Path(__file__).parent / "fixtures" / "classification_fixtures.json"
     with open(fixtures_path, "r", encoding="utf-8") as f:
         fixtures = json.load(f)
@@ -130,8 +125,8 @@ def main():
     results = {
         "dataset_version": "classification_pilot_v1",
         "prompt_version": "v1",
-        "provider": "google-genai",
-        "model": "gemini-2.5-flash",
+        "provider": "ollama",
+        "model": settings.ollama_model,
         "temperature": 0.0,
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "total_examples": total,

@@ -42,6 +42,13 @@ class TestSettingsDefaults:
         assert settings.processed_data_dir == settings.data_dir / "processed"
         assert settings.index_dir == settings.data_dir / "indexes"
 
+    def test_ollama_defaults(self) -> None:
+        settings = Settings()
+        assert settings.ollama_base_url == "http://localhost:11434"
+        assert settings.ollama_model == "qwen3:8b"
+        assert settings.ollama_embedding_model == "nomic-embed-text"
+        assert settings.ollama_timeout == 120.0
+
 
 class TestSettingsFromEnv:
     """Verify that IDEAGEN_ environment variables override defaults."""
@@ -65,6 +72,15 @@ class TestSettingsFromEnv:
         monkeypatch.setenv("IDEAGEN_APP_NAME", "TestApp")
         settings = Settings()
         assert settings.app_name == "TestApp"
+
+    def test_ollama_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IDEAGEN_OLLAMA_MODEL", "custom-model")
+        monkeypatch.setenv("IDEAGEN_OLLAMA_BASE_URL", "http://remote:11434")
+        monkeypatch.setenv("IDEAGEN_OLLAMA_EMBEDDING_MODEL", "bge-m3")
+        settings = Settings()
+        assert settings.ollama_model == "custom-model"
+        assert settings.ollama_base_url == "http://remote:11434"
+        assert settings.ollama_embedding_model == "bge-m3"
 
 
 class TestGetSettings:

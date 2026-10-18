@@ -48,7 +48,9 @@ from ideagen.ingestion.pdf import ManualPDFIngestionService, PDFExtractionError
 from ideagen.understanding import PaperUnderstandingPipeline, ResearchKnowledgeResponseDTO
 from ideagen.discovery import SemanticGapDiscoveryPipeline, ResearchGapResponseDTO, GapStatus
 from ideagen.discovery.vector_index import StatementVectorIndex
-from ideagen.discovery.embeddings import GeminiEmbeddingProvider
+from ideagen.discovery.embeddings import get_default_embedding_provider, OllamaEmbeddingProvider
+from ideagen.llm.ollama_provider import OllamaLLMProvider
+from ideagen.core.config import get_settings
 from ideagen.generation.pipeline import ResearchOpportunityPipeline
 from ideagen.generation.models import ResearchOpportunityInputDTO, OpportunityStatus
 from ideagen.reporting.report_service import OpportunityReportService
@@ -385,74 +387,39 @@ def generate_opportunity_from_gap(gap_id: uuid.UUID, db: Session = Depends(get_d
         existing_methods=methods,
     )
 
-    # Initialize Phase 4 vector index & embedder
-    vector_index = StatementVectorIndex(dimension=3072)
-    # Populate FAISS index from db statements
+    settings = get_settings()
+    embedder = get_default_embedding_provider()
+    vector_index = StatementVectorIndex(dimension=embedder.dimension)
+
+    # Populate FAISS index from db statements using real local embeddings
     all_stmts = db.query(ResearchStatement).all()
     if all_stmts:
-        import numpy as np
-        # Build simple fake or real embeddings for retrieval
-        dummy_vecs = np.random.randn(len(all_stmts), 3072).astype(np.float32)
-        vector_index.add_statements(all_stmts, dummy_vecs)
+        stmt_texts = [s.statement_text for s in all_stmts]
+        stmt_vecs = embedder.embed_texts(stmt_texts)
+        vector_index.add_statements(all_stmts, stmt_vecs)
 
-    class FastEmbedder:
-        @property
-        def dimension(self): return 3072
-        @property
-        def model_name(self): return "gemini-embedding-001"
-        def embed_texts(self, texts):
-            import numpy as np
-            return np.random.randn(len(texts), 3072).astype(np.float32)
+    llm_provider = OllamaLLMProvider(
+        base_url=settings.ollama_base_url,
+        model_name=settings.ollama_model,
+        timeout=settings.ollama_timeout,
+    )
 
     pipeline = ResearchOpportunityPipeline(
         vector_index=vector_index,
-        embedder=FastEmbedder(),
-        llm_provider=None, # Handles LLM calls or error propagation as configured
+        embedder=embedder,
+        llm_provider=llm_provider,
         max_refinement_iterations=2,
+        generation_model=settings.ollama_model,
+        validation_model=settings.ollama_model,
     )
 
     try:
         opp_dto = pipeline.process_validated_gap(input_dto=input_dto, db_session=db)
     except Exception as e:
-        # If live LLM fails or is unconfigured, create an evidence-grounded validated draft record directly
-        from ideagen.generation.persistence import OpportunityPersistenceLayer
-        from ideagen.generation.models import FeasibilityAssessment, NoveltyAssessment, ResearchOpportunityDTO
-        p_layer = OpportunityPersistenceLayer(db)
-        opp_dto = ResearchOpportunityDTO(
-            id=uuid.uuid4(),
-            gap_id=gap.id,
-            research_problem=gap.research_problem,
-            identified_gap=gap.gap_statement,
-            proposed_research_direction=f"Investigate adaptive constraint frameworks resolving: {gap.gap_statement}",
-            reasoning=f"Grounded evidence indicates recurring limitations ({'; '.join(gap.limitations[:2]) if gap.limitations else 'existing bottlenecks'}). Target problem: {gap.research_problem}",
-            technical_approach=f"Combine literature baselines with step-wise verification and continuous grounding checks.",
-            expected_contribution=f"Provides a potentially novel methodological framework for resolving {gap.research_problem} within the analyzed corpus.",
-            feasibility=FeasibilityAssessment(
-                required_data="Benchmark datasets from analyzed corpus",
-                required_compute="Standard 1x GPU workstation (RTX 4090)",
-                implementation_complexity="Moderate algorithmic complexity",
-                experimental_setup="Comparative evaluation against baseline papers",
-                feasibility_score=0.85,
-                summary="Feasible under standard academic computing resources.",
-            ),
-            novelty_assessment=NoveltyAssessment(
-                assessment="Potentially novel within the analyzed corpus",
-                reasoning="Distinct focus from prior indexed literature statements.",
-                differentiation="Directly targets identified gap constraints.",
-                confidence=0.85,
-            ),
-            confidence=gap.validation_confidence or 0.85,
-            supporting_statement_ids=stmt_ids,
-            supporting_paper_ids=paper_ids,
-            prior_art_statement_ids=[],
-            status=OpportunityStatus.VALIDATED,
-            generation_model="gemini-2.5-flash",
-            validation_model="gemini-2.5-flash",
-            embedding_model="gemini-embedding-001",
-            refinement_iteration_count=0,
-            pipeline_version="v1.0",
+        raise HTTPException(
+            status_code=502,
+            detail=f"Ollama opportunity synthesis failed: {e}"
         )
-        p_layer.save_opportunity(opp_dto)
 
     report_service = OpportunityReportService(db)
     report = report_service.generate_opportunity_report(opp_dto.id)
@@ -663,3 +630,101 @@ def analyze_search_papers(req: AnalyzeRequest):
     for p, raw in zip(req.papers, raw_papers):
         raw["abstract"] = p.abstract
     return build_demo_scenario(custom_raw_papers=raw_papers)
+
+
+@app.post("/api/papers/ingest_search", response_model=PaperResponseDTO)
+def ingest_search_paper(paper: SearchResultPaper, db: Session = Depends(get_db)):
+    """Ingests a real search result (e.g. from arXiv) into PostgreSQL corpus with deterministic passages."""
+    from ideagen.ingestion.passage_chunker import BlockUnit, PassageChunker
+    import hashlib
+
+    persistence = SQLAlchemyPersistenceLayer(db)
+    pub_date = datetime.date.today()
+    if paper.publication_date:
+        try:
+            pub_date = datetime.date.fromisoformat(paper.publication_date[:10])
+        except Exception:
+            pass
+
+    content = f"{paper.title}\n\nAbstract\n{paper.abstract}"
+    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    # Check if document already exists by content hash or DOI
+    if persistence.document_exists_by_hash(content_hash):
+        existing_doc = persistence.get_document_by_hash(content_hash)
+        if existing_doc and existing_doc.paper:
+            return get_paper_details(existing_doc.paper.id, db)
+
+    if paper.doi and persistence.paper_exists_by_doi(paper.doi):
+        existing_paper = db.query(Paper).filter(Paper.doi == paper.doi).first()
+        if existing_paper:
+            return get_paper_details(existing_paper.id, db)
+
+    unique_source_id = f"arxiv_{paper.id}"
+    now_ts = datetime.datetime.now(datetime.timezone.utc)
+    paper_dto = PaperCreateDTO(
+        source_type=SourceType.MANUAL_UPLOAD,
+        source_id=unique_source_id,
+        title=paper.title,
+        publication_date=pub_date,
+        batch_id="arxiv",
+        abstract=paper.abstract,
+        doi=paper.doi,
+        authors=[{"name": a} for a in paper.authors],
+        raw_metadata=paper.raw_metadata or {"url": paper.url},
+    )
+    saved_id = persistence.save_paper(paper_dto)
+
+    doc_dto = PaperDocumentCreateDTO(
+        paper_id=saved_id,
+        full_text=content,
+        extraction_method="ARXIV_METADATA",
+        extraction_version="1.0",
+        extracted_at=now_ts,
+        content_hash=content_hash,
+        original_filename=f"{paper.id}.txt",
+        acquisition_timestamp=now_ts,
+        provenance_metadata={"source": paper.source, "url": paper.url},
+    )
+    saved_doc_id = persistence.save_paper_document(doc_dto)
+
+    chunker = PassageChunker()
+    blocks = [
+        BlockUnit(text=f"Title: {paper.title}", page_number=1, section="Title"),
+        BlockUnit(text=paper.abstract, page_number=1, section="Abstract"),
+    ]
+    passages = chunker.create_passages(blocks=blocks, paper_id=saved_id, document_id=saved_doc_id)
+    persistence.save_passages(passages)
+
+    return get_paper_details(saved_id, db)
+
+
+
+# ── Phase 7 Evaluation Endpoints ──────────────────────────────────────────
+
+@app.get("/api/v1/evaluation/results", response_model=Dict[str, Any])
+def get_evaluation_results(db: Session = Depends(get_db)):
+    """Returns Phase 7 evaluation report comparing Baselines A, B, and IdeaGen system."""
+    from ideagen.evaluation import EvaluationPipelineRunner
+    from ideagen.db.models import ResearchOpportunityRecord
+
+    opps = db.query(ResearchOpportunityRecord).all()
+    runner = EvaluationPipelineRunner()
+    report = runner.run_evaluation(ideagen_opportunity_records=opps if opps else None)
+    return report.model_dump()
+
+
+@app.post("/api/v1/evaluation/run", response_model=Dict[str, Any])
+def run_evaluation_pipeline(db: Session = Depends(get_db)):
+    """Triggers complete evaluation execution across dataset split and saves result artifact."""
+    from ideagen.evaluation import EvaluationPipelineRunner
+    from ideagen.db.models import ResearchOpportunityRecord
+    from pathlib import Path
+
+    opps = db.query(ResearchOpportunityRecord).all()
+    runner = EvaluationPipelineRunner()
+    report = runner.run_evaluation(ideagen_opportunity_records=opps if opps else None)
+
+    out_dir = Path("evaluation_outputs")
+    runner.export_results(report, out_dir)
+    return report.model_dump()

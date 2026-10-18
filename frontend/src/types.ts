@@ -1,13 +1,34 @@
 export interface WorkspaceStats {
   total_papers: number;
-  processed_papers: number;
+  analyzed_papers: number;
   total_statements: number;
   total_gaps: number;
   candidate_gaps: number;
   validated_gaps: number;
   rejected_gaps: number;
   total_opportunities: number;
-  analysis_status: 'IDLE' | 'PROCESSING' | 'COMPLETED' | 'ERROR';
+  validated_opportunities?: number;
+  analysis_status: 'IDLE' | 'PROCESSING' | 'COMPLETED' | 'ERROR' | 'COMPLETE';
+}
+
+export interface SearchResultPaper {
+  id: string;
+  source: string;
+  title: string;
+  authors: string[];
+  publication_year: number;
+  publication_date: string;
+  abstract: string;
+  url?: string | null;
+  doi?: string | null;
+  raw_metadata?: Record<string, any>;
+}
+
+export interface SearchResponse {
+  query: string;
+  source: string;
+  count: number;
+  papers: SearchResultPaper[];
 }
 
 export interface PaperResponse {
@@ -20,10 +41,11 @@ export interface PaperResponse {
   batch_id: string;
   abstract: string;
   authors: string[];
-  passages_count: number;
-  statements_count: number;
-  has_knowledge: boolean;
-  sections: string[];
+  passages_count?: number;
+  statements_count?: number;
+  has_knowledge?: boolean;
+  knowledge_status?: string;
+  sections?: string[];
   created_at?: string;
 }
 
@@ -94,18 +116,28 @@ export interface GapResponse {
 }
 
 export interface NoveltyAssessment {
-  novelty_level: string;
+  assessment?: string;
   reasoning: string;
-  novelty_statement: string;
-  prior_art_overlap: string[];
-  differentiating_factors: string[];
+  differentiation?: string;
+  confidence?: number;
+  overlapping_statement_ids?: string[];
+  overlapping_paper_ids?: string[];
+  novelty_level?: string;
+  novelty_statement?: string;
+  prior_art_overlap?: string[];
+  differentiating_factors?: string[];
 }
 
 export interface FeasibilityAssessment {
   feasibility_score: number;
-  technical_barriers: string[];
-  required_resources: string[];
-  estimated_timeline: string;
+  required_data?: string;
+  required_compute?: string;
+  implementation_complexity?: string;
+  experimental_setup?: string;
+  summary?: string;
+  technical_barriers?: string[];
+  required_resources?: string[];
+  estimated_timeline?: string;
 }
 
 export interface OpportunityResponse {
@@ -114,15 +146,17 @@ export interface OpportunityResponse {
   research_problem: string;
   identified_gap: string;
   proposed_research_direction: string;
-  reasoning: string;
-  technical_approach: string;
-  expected_contribution: string;
-  feasibility: FeasibilityAssessment;
-  novelty_assessment: NoveltyAssessment;
+  reasoning?: string;
+  technical_approach?: string;
+  expected_contribution?: string;
+  feasibility?: FeasibilityAssessment;
+  novelty_assessment?: NoveltyAssessment;
   confidence: number;
-  supporting_statement_ids: string[];
-  supporting_paper_ids: string[];
-  prior_art_statement_ids: string[];
+  supporting_statement_ids?: string[];
+  supporting_paper_ids?: string[];
+  supporting_statement_count?: number;
+  supporting_paper_count?: number;
+  prior_art_statement_ids?: string[];
   status: string;
   created_at?: string;
 }
@@ -140,7 +174,7 @@ export interface OpportunityReport {
   gap_id: string;
   research_problem: string;
   evidence_of_problem: EvidenceDetail[];
-  existing_approaches: EvidenceDetail[];
+  existing_approaches: string[] | EvidenceDetail[];
   identified_gap: string;
   why_existing_work_is_insufficient: string;
   proposed_research_direction: string;
@@ -148,12 +182,51 @@ export interface OpportunityReport {
   technical_approach: string;
   expected_contribution: string;
   feasibility: FeasibilityAssessment;
-  prior_art_assessment: NoveltyAssessment;
-  differentiation: string[];
-  supporting_papers: PaperProvenance[];
+  prior_art_assessment?: NoveltyAssessment | Record<string, any>;
+  differentiation: string | string[];
+  supporting_papers: PaperResponse[] | PaperProvenance[];
   supporting_evidence: EvidenceDetail[];
   confidence: number;
-  validation_status: string;
-  cautious_novelty_statement: string;
-  generated_at: string;
+  novelty_assessment?: NoveltyAssessment;
+  status: string;
+  created_at?: string;
+  generation_model?: string;
+  validation_model?: string;
+  embedding_model?: string;
+  refinement_iteration_count?: number;
+  pipeline_version?: string;
+  validation_status?: string;
+  cautious_novelty_statement?: string;
+  generated_at?: string;
 }
+
+export interface SystemEvaluationSummary {
+  system_name: string;
+  anonymized_label: string;
+  opportunities_eval_count: number;
+  mean_evidence_coverage: number;
+  mean_citation_correctness: number;
+  mean_prior_art_overlap: number;
+}
+
+export interface HumanEvaluationPackage {
+  status: string;
+  instruction_text: string;
+  total_evaluators: number;
+  ratings: any[];
+  metadata: Record<string, any>;
+}
+
+export interface FullEvaluationReport {
+  evaluation_title: string;
+  dataset_version: string;
+  domain: string;
+  timestamp: string;
+  leakage_check_passed: boolean;
+  blinding_seed: number;
+  system_summaries: SystemEvaluationSummary[];
+  human_evaluation: HumanEvaluationPackage;
+  statistical_analysis: Record<string, any>;
+  limitations: string[];
+}
+

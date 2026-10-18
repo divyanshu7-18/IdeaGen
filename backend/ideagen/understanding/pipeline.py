@@ -14,7 +14,7 @@ import uuid
 from ideagen.core.config import get_settings
 from ideagen.db.persistence import SQLAlchemyPersistenceLayer
 from ideagen.db.models import Paper
-from ideagen.llm.gemini_provider import GeminiLLMProvider
+from ideagen.llm.ollama_provider import OllamaLLMProvider
 from ideagen.llm.provider import LLMProvider
 from .models import (
     ResearchKnowledgeCreateDTO,
@@ -40,12 +40,15 @@ class PaperUnderstandingPipeline:
 
         if provider is not None:
             self.provider = provider
-            self.model_name = model_name or "custom-provider"
+            self.model_name = model_name or getattr(provider, "model_name", "custom-provider")
         else:
-            # Default to configured Gemini provider using real pretrained model
-            api_key = settings.gemini_api_key or ""
-            self.model_name = model_name or settings.gemini_model_name
-            self.provider = GeminiLLMProvider(api_key=api_key, model_name=self.model_name)
+            # Default to configured Ollama provider using local model
+            self.model_name = model_name or settings.ollama_model
+            self.provider = OllamaLLMProvider(
+                base_url=settings.ollama_base_url,
+                model_name=self.model_name,
+                timeout=settings.ollama_timeout,
+            )
 
         self.selector = PassageSelector()
         self.extractor = ScientificPaperExtractor(

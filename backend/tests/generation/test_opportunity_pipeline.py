@@ -81,7 +81,7 @@ def test_full_pipeline_execution_with_llm():
     assert result.status == OpportunityStatus.VALIDATED
     assert result.supporting_statement_ids == [s_id]
     assert result.supporting_paper_ids == [p_id]
-    assert result.generation_model == "gemini-2.5-flash"
+    assert result.generation_model == "qwen3:8b"
     assert result.embedding_model == "fake-128d-embedder"
     assert "Potentially novel" in result.novelty_assessment.assessment
 

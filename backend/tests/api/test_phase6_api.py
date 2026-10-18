@@ -142,9 +142,9 @@ def test_db():
         supporting_paper_ids=[str(paper_id)],
         prior_art_statement_ids=[],
         status="VALIDATED",
-        generation_model="gemini-2.5-flash",
-        validation_model="gemini-2.5-flash",
-        embedding_model="gemini-embedding-001",
+        generation_model="qwen3:8b",
+        validation_model="qwen3:8b",
+        embedding_model="nomic-embed-text",
         refinement_iteration_count=0,
         pipeline_version="v1.0",
     )
@@ -238,8 +238,18 @@ def test_get_opportunity_report_endpoint(test_db):
     assert "technical_approach" in report
     assert "expected_contribution" in report
     assert "feasibility" in report
+    feas = report["feasibility"]
+    assert "required_data" in feas
+    assert "required_compute" in feas
+    assert "implementation_complexity" in feas
+    assert "experimental_setup" in feas
+    assert "feasibility_score" in feas
+    assert isinstance(feas["feasibility_score"], (int, float))
+
     assert "prior_art_assessment" in report
     assert "differentiation" in report
+    assert isinstance(report["differentiation"], str)
+
     assert "supporting_papers" in report
     assert len(report["supporting_papers"]) == 1
     assert report["supporting_papers"][0]["title"] == "Test Scientific Paper on RAG"

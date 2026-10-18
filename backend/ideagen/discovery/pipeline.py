@@ -15,7 +15,7 @@ import uuid
 
 from ideagen.core.config import get_settings
 from ideagen.db.persistence import SQLAlchemyPersistenceLayer
-from ideagen.llm.gemini_provider import GeminiLLMProvider
+from ideagen.llm.ollama_provider import OllamaLLMProvider
 from ideagen.llm.provider import LLMProvider
 from .models import (
     GapStatus,
@@ -62,8 +62,11 @@ class SemanticGapDiscoveryPipeline:
         if llm_provider is not None:
             val_provider = llm_provider
         else:
-            api_key = settings.gemini_api_key or ""
-            val_provider = GeminiLLMProvider(api_key=api_key, model_name=settings.gemini_model_name)
+            val_provider = OllamaLLMProvider(
+                base_url=settings.ollama_base_url,
+                model_name=settings.ollama_model,
+                timeout=settings.ollama_timeout,
+            )
         self.validator = GapValidator(provider=val_provider, min_valid_evidence=min_supporting_evidence)
 
     def discover_gaps(self, persist_index: bool = True) -> List[ResearchGapResponseDTO]:
@@ -76,6 +79,11 @@ class SemanticGapDiscoveryPipeline:
 
         statements_by_id = {s.id: s for s in statements}
         texts = [s.statement_text for s in statements]
+
+        # Populate paper_map for canonical identity resolution
+        paper_map = {p.id: p for p in self.persistence.session.query(Paper).all()}
+        self.pattern_analyzer.paper_map = paper_map
+        self.validator.paper_map = paper_map
 
         # 2. Generate dense scientific embeddings
         logger.info(f"Generating embeddings for {len(statements)} statements with {self.embedding_provider.model_name}")

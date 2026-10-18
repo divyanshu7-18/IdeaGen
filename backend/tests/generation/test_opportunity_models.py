@@ -72,9 +72,9 @@ def test_research_opportunity_dto_schema():
         prior_art_statement_ids=[],
         status=OpportunityStatus.VALIDATED,
         created_at=datetime.utcnow(),
-        generation_model="gemini-2.5-flash",
-        validation_model="gemini-2.5-flash",
-        embedding_model="gemini-embedding-001",
+        generation_model="qwen3:8b",
+        validation_model="qwen3:8b",
+        embedding_model="nomic-embed-text",
         refinement_iteration_count=0,
         pipeline_version="v1.0",
     )
@@ -82,4 +82,4 @@ def test_research_opportunity_dto_schema():
     assert opp.gap_id == gap_id
     assert opp.status == OpportunityStatus.VALIDATED
     assert opp.supporting_statement_ids == [s_id]
-    assert opp.generation_model == "gemini-2.5-flash"
+    assert opp.generation_model == "qwen3:8b"

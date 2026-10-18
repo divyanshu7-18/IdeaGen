@@ -1,4 +1,4 @@
-"""Semantic Gap Discovery package (Phase 4)."""
+"""Semantic Gap Discovery package (Phase 4 / Phase 8 Ollama)."""
 
 from .models import (
     GapStatus,
@@ -12,7 +12,7 @@ from .models import (
 )
 from .embeddings import (
     EmbeddingProvider,
-    GeminiEmbeddingProvider,
+    OllamaEmbeddingProvider,
     SentenceTransformerEmbeddingProvider,
     get_default_embedding_provider,
 )
@@ -32,7 +32,7 @@ __all__ = [
     "ResearchGapCreateDTO",
     "ResearchGapResponseDTO",
     "EmbeddingProvider",
-    "GeminiEmbeddingProvider",
+    "OllamaEmbeddingProvider",
     "SentenceTransformerEmbeddingProvider",
     "get_default_embedding_provider",
     "StatementVectorIndex",

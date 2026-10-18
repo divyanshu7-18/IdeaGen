@@ -29,7 +29,7 @@ from ideagen.discovery.models import (
     ResearchGapCreateDTO,
     StatementEvidenceDTO,
 )
-from ideagen.discovery.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
+from ideagen.discovery.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
 from ideagen.discovery.vector_index import StatementVectorIndex, StatementSearchResult
 from ideagen.discovery.grouper import SemanticGrouper, SemanticCluster
 from ideagen.discovery.pattern_analyzer import ResearchPatternAnalyzer

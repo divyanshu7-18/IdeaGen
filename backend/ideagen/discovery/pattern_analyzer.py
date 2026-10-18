@@ -13,6 +13,7 @@ import uuid
 
 from .models import GapCandidate
 from .grouper import SemanticCluster
+from .canonical_identity import get_canonical_paper_identity
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,13 @@ logger = logging.getLogger(__name__)
 class ResearchPatternAnalyzer:
     """Analyzes research patterns across clustered statements to detect candidate gaps."""
 
-    def __init__(self, min_supporting_evidence: int = 1):
+    def __init__(
+        self,
+        min_supporting_evidence: int = 1,
+        paper_map: Optional[Dict[uuid.UUID, Any]] = None,
+    ):
         self.min_supporting_evidence = min_supporting_evidence
+        self.paper_map = paper_map or {}
 
     def analyze_clusters(self, clusters: List[SemanticCluster]) -> List[GapCandidate]:
         """Analyzes semantic clusters and proposes candidate research gaps."""
@@ -130,6 +136,11 @@ class ResearchPatternAnalyzer:
             gap_stmt = f"Identified research problem lacking comprehensive empirical resolution: {primary_problem}."
             why_insufficient = f"The underlying research question is recognized, yet experimental verification remains partial."
 
+        canonical_paper_ids: Set[str] = set()
+        for p_id in supporting_paper_ids:
+            paper_obj = self.paper_map.get(p_id)
+            canonical_paper_ids.add(get_canonical_paper_identity(paper_obj, fallback_id=p_id))
+
         return GapCandidate(
             gap_statement=gap_stmt,
             research_problem=primary_problem,
@@ -142,6 +153,7 @@ class ResearchPatternAnalyzer:
                 "pattern_type": pattern_type,
                 "cluster_size": len(statements),
                 "contributing_paper_count": len(supporting_paper_ids),
+                "contributing_canonical_paper_count": len(canonical_paper_ids),
                 "limitation_count": len(limitations),
                 "future_work_count": len(future_works),
             },

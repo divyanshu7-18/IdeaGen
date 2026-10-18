@@ -17,6 +17,7 @@ from .models import (
     ResearchKnowledgeCreateDTO,
     ResearchStatementCreateDTO,
     ExtractionStatus,
+    StatementType,
 )
 from .passage_selector import SelectedPassage, PassageSelector
 
@@ -28,8 +29,8 @@ Analyze the provided excerpts of a scientific paper and extract structured resea
 
 CRITICAL RULES:
 1. Ground all extractions in the provided text. Do NOT fabricate, invent, or extrapolate information.
-2. If a field (e.g., datasets, limitations) is not mentioned in the passages, return an empty list or null.
-3. Every statement in the statements list must identify the exact `passage_index` of the passage providing evidence.
+2. Identify the primary research_problem and proposed methodology described in the excerpts.
+3. Extract granular scientific statements into the statements list. Every statement in the statements list must identify the exact `passage_index` of the passage providing evidence.
 4. Categorize statements accurately into:
    - PROBLEM: Research gap, challenge, or problem addressed.
    - QUESTION: Research questions or hypotheses formulated.
@@ -40,6 +41,7 @@ CRITICAL RULES:
    - FUTURE_WORK: Proposed directions, unresolved questions, or next steps.
    - ASSUMPTION: Explicit assumptions made by the methodology.
    - CONTRIBUTION: Core novel contributions claimed by the authors.
+5. If an optional field is not mentioned at all in the passages, return an empty list or null.
 """
 
 
@@ -136,11 +138,29 @@ class ScientificPaperExtractor:
             )
             resolved_statements.append(statement_dto)
 
+        methodology = raw_output.methodology
+        if not methodology:
+            method_stmts = [
+                s.statement_text for s in raw_output.statements
+                if s.statement_type in (StatementType.METHOD, "METHOD")
+            ]
+            if method_stmts:
+                methodology = method_stmts[0]
+
+        research_problem = raw_output.research_problem
+        if not research_problem:
+            prob_stmts = [
+                s.statement_text for s in raw_output.statements
+                if s.statement_type in (StatementType.PROBLEM, "PROBLEM")
+            ]
+            if prob_stmts:
+                research_problem = prob_stmts[0]
+
         return ResearchKnowledgeCreateDTO(
             paper_id=paper_id,
-            research_problem=raw_output.research_problem,
+            research_problem=research_problem,
             research_questions=raw_output.research_questions,
-            methodology=raw_output.methodology,
+            methodology=methodology,
             datasets=raw_output.datasets,
             findings=raw_output.findings,
             limitations=raw_output.limitations,

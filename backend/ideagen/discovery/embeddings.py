@@ -1,7 +1,7 @@
-"""Pretrained scientific and text embedding providers (Phase 4).
+"""Pretrained scientific and text embedding providers (Phase 8 - Ollama Architecture).
 
 Generates real, reproducible dense vector representations of research statements
-supporting Gemini GenAI embeddings and SentenceTransformers.
+supporting Ollama local embeddings (e.g., nomic-embed-text) and local SentenceTransformers.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import List, Protocol, runtime_checkable
 import numpy as np
+import requests
 
 from ideagen.core.config import get_settings
 
@@ -34,14 +35,20 @@ class EmbeddingProvider(Protocol):
         ...
 
 
-class GeminiEmbeddingProvider:
-    """Generates embeddings using Google GenAI pretrained embedding models."""
+class OllamaEmbeddingProvider:
+    """Generates embeddings locally using Ollama embedding models."""
 
-    def __init__(self, api_key: str, model_name: str = "models/gemini-embedding-001"):
-        from google import genai
-        self._client = genai.Client(api_key=api_key)
+    def __init__(
+        self,
+        base_url: str = "http://localhost:11434",
+        model_name: str = "nomic-embed-text",
+        timeout: float = 60.0,
+        dimension: int = 768,
+    ):
+        self._base_url = base_url.rstrip("/")
         self._model_name = model_name
-        self._dimension = 3072
+        self._timeout = timeout
+        self._dimension = dimension
 
     @property
     def dimension(self) -> int:
@@ -52,27 +59,51 @@ class GeminiEmbeddingProvider:
         return self._model_name
 
     def embed_texts(self, texts: List[str]) -> np.ndarray:
-        """Embeds a list of texts and returns an (N, D) float32 numpy array."""
+        """Embeds texts using Ollama /api/embed with L2 normalization."""
         if not texts:
             return np.empty((0, self._dimension), dtype=np.float32)
 
-        vectors: List[List[float]] = []
-        # Batch requests to respect API thresholds
-        batch_size = 20
-        for i in range(0, len(texts), batch_size):
-            chunk = texts[i : i + batch_size]
-            for text in chunk:
-                # Handle empty strings safely
-                safe_text = text.strip() if text and text.strip() else "scientific research statement"
-                resp = self._client.models.embed_content(
-                    model=self._model_name,
-                    contents=safe_text,
-                )
-                if not resp.embeddings or not resp.embeddings[0].values:
-                    raise RuntimeError(f"Embedding API returned empty vector for text: {safe_text[:30]}")
-                vectors.append(resp.embeddings[0].values)
+        clean_texts = [
+            t.strip() if t and t.strip() else "scientific research statement"
+            for t in texts
+        ]
 
-        arr = np.array(vectors, dtype=np.float32)
+        embed_url = f"{self._base_url}/api/embed"
+        batch_size = 32
+        all_embeddings: List[List[float]] = []
+
+        for i in range(0, len(clean_texts), batch_size):
+            chunk = clean_texts[i : i + batch_size]
+            payload = {
+                "model": self._model_name,
+                "input": chunk,
+            }
+            try:
+                resp = requests.post(embed_url, json=payload, timeout=self._timeout)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Ollama embedding request failed at {self._base_url}: {e}"
+                ) from e
+
+            if resp.status_code != 200:
+                raise RuntimeError(
+                    f"Ollama embedding API returned HTTP {resp.status_code}: {resp.text}"
+                )
+
+            data = resp.json()
+            embeddings = data.get("embeddings", [])
+            if not embeddings or len(embeddings) != len(chunk):
+                raise RuntimeError(
+                    f"Ollama returned {len(embeddings)} embeddings for chunk of {len(chunk)} items"
+                )
+
+            all_embeddings.extend(embeddings)
+
+        arr = np.array(all_embeddings, dtype=np.float32)
+        if arr.shape[1] != self._dimension:
+            # Update dimension to match actual model output
+            self._dimension = arr.shape[1]
+
         # Normalize to unit length for cosine similarity via inner product
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
@@ -111,8 +142,10 @@ class SentenceTransformerEmbeddingProvider:
 
 
 def get_default_embedding_provider() -> EmbeddingProvider:
-    """Returns the configured default embedding provider."""
+    """Returns the configured default Ollama embedding provider."""
     settings = get_settings()
-    if settings.gemini_api_key:
-        return GeminiEmbeddingProvider(api_key=settings.gemini_api_key)
-    return SentenceTransformerEmbeddingProvider()
+    return OllamaEmbeddingProvider(
+        base_url=settings.ollama_base_url,
+        model_name=settings.ollama_embedding_model,
+        timeout=settings.ollama_timeout,
+    )

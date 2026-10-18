@@ -12,6 +12,7 @@ import uuid
 
 from ideagen.llm.provider import LLMProvider
 from ideagen.llm.exceptions import ProviderFailureError, MalformedResponseError
+from .canonical_identity import get_canonical_paper_identity
 from .models import (
     GapCandidate,
     GapValidationResult,
@@ -46,9 +47,17 @@ RULES:
 class GapValidator:
     """Validates candidate research gaps using an LLM and verifies evidence integrity."""
 
-    def __init__(self, provider: LLMProvider, min_valid_evidence: int = 1):
+    def __init__(
+        self,
+        provider: LLMProvider,
+        min_valid_evidence: int = 1,
+        paper_map: Optional[Dict[uuid.UUID, Any]] = None,
+        min_independent_papers: int = 1,
+    ):
         self.provider = provider
         self.min_valid_evidence = min_valid_evidence
+        self.paper_map = paper_map or {}
+        self.min_independent_papers = min_independent_papers
 
     def validate_candidate(
         self,
@@ -134,16 +143,34 @@ class GapValidator:
         if not verified_stmt_ids and val_result.verdict == ValidationVerdict.VALID:
             verified_stmt_ids = list(valid_evidence_pool)
 
-        # Check evidence count integrity
+        # Check canonical paper independence across verified statements
+        canonical_paper_ids: Set[str] = set()
+        for s_id in verified_stmt_ids:
+            s = statements_by_id[s_id]
+            p_id = s.paper_id if hasattr(s, "paper_id") else s["paper_id"]
+            if isinstance(p_id, str):
+                p_id = uuid.UUID(p_id)
+            paper_obj = self.paper_map.get(p_id) if self.paper_map else getattr(s, "paper", None)
+            canonical_paper_ids.add(get_canonical_paper_identity(paper_obj, fallback_id=p_id))
+
+        has_sufficient_independent_papers = len(canonical_paper_ids) >= self.min_independent_papers
         is_supported = (
             val_result.verdict == ValidationVerdict.VALID
             and len(verified_stmt_ids) >= self.min_valid_evidence
+            and has_sufficient_independent_papers
         )
 
         status = GapStatus.VALIDATED if is_supported else GapStatus.REJECTED
         reasoning = val_result.reasoning
         if val_result.verdict == ValidationVerdict.VALID and not is_supported:
-            reasoning = "Model voted VALID but cited statements could not be verified in candidate evidence pool."
+            if not has_sufficient_independent_papers:
+                reasoning = (
+                    f"Model voted VALID but candidate lacks independent cross-paper corroboration: "
+                    f"requires >= {self.min_independent_papers} distinct canonical work(s), but verified "
+                    f"evidence originates from only {len(canonical_paper_ids)} distinct work(s)."
+                )
+            else:
+                reasoning = "Model voted VALID but cited statements could not be verified in candidate evidence pool."
 
         # Build verified paper list and evidence items
         verified_paper_ids: Set[uuid.UUID] = set()
@@ -184,5 +211,7 @@ class GapValidator:
             metadata={
                 "signals": candidate.signals,
                 "model_verdict": val_result.verdict.value,
+                "canonical_paper_count": len(canonical_paper_ids),
+                "canonical_papers": list(canonical_paper_ids),
             },
         )

@@ -41,8 +41,8 @@ class ResearchOpportunityPipeline:
         embedder: EmbeddingProvider,
         llm_provider: Optional[LLMProvider] = None,
         max_refinement_iterations: int = 2,
-        generation_model: str = "gemini-2.5-flash",
-        validation_model: str = "gemini-2.5-flash",
+        generation_model: str = "qwen3:8b",
+        validation_model: str = "qwen3:8b",
         pipeline_version: str = "v1.0",
     ):
         self.vector_index = vector_index
@@ -52,7 +52,7 @@ class ResearchOpportunityPipeline:
 
         self.generation_model = generation_model
         self.validation_model = validation_model
-        self.embedding_model = getattr(embedder, "model_name", "gemini-embedding-001")
+        self.embedding_model = getattr(embedder, "model_name", "nomic-embed-text")
         self.pipeline_version = pipeline_version
 
         # Initialize sub-components

@@ -72,9 +72,9 @@ def test_persistence_save_and_retrieve_opportunity(db_session):
         prior_art_statement_ids=[],
         status=OpportunityStatus.VALIDATED,
         created_at=datetime.utcnow(),
-        generation_model="gemini-2.5-flash",
-        validation_model="gemini-2.5-flash",
-        embedding_model="gemini-embedding-001",
+        generation_model="qwen3:8b",
+        validation_model="qwen3:8b",
+        embedding_model="nomic-embed-text",
         refinement_iteration_count=0,
         pipeline_version="v1.0",
     )

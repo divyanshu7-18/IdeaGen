@@ -18,7 +18,7 @@ from ideagen.db.models import Base, Paper, PaperDocument, PaperPassage
 from ideagen.db.persistence import SQLAlchemyPersistenceLayer
 from ideagen.ingestion.models import PaperCreateDTO, SourceType
 from ideagen.llm.exceptions import ProviderFailureError, MalformedResponseError
-from ideagen.llm.gemini_provider import GeminiLLMProvider
+from ideagen.llm.ollama_provider import OllamaLLMProvider
 from ideagen.llm.provider import LLMProvider
 from ideagen.understanding.models import (
     StatementType,
@@ -415,10 +415,14 @@ def test_research_knowledge_persistence_and_retrieval(session):
 
 
 def test_real_model_inference_or_integration(session):
-    """Verifies end-to-end extraction using real pretrained Gemini 2.5 Flash model when credentials are configured."""
-    api_key = settings.gemini_api_key
-    if not api_key:
-        pytest.skip("GEMINI_API_KEY not configured; skipping live model inference test.")
+    """Verifies end-to-end extraction using real pretrained Ollama model when server is running."""
+    import requests
+    try:
+        r = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=2.0)
+        if r.status_code != 200:
+            pytest.skip("Ollama server not responding; skipping live model inference test.")
+    except Exception:
+        pytest.skip("Ollama server not available; skipping live model inference test.")
 
     layer = SQLAlchemyPersistenceLayer(session)
 
@@ -475,9 +479,9 @@ def test_real_model_inference_or_integration(session):
     session.add_all(passages)
     session.commit()
 
-    # 2. Run real PaperUnderstandingPipeline with Gemini 2.5 Flash
-    provider = GeminiLLMProvider(api_key=api_key, model_name="gemini-2.5-flash")
-    pipeline = PaperUnderstandingPipeline(persistence=layer, provider=provider, model_name="gemini-2.5-flash")
+    # 2. Run real PaperUnderstandingPipeline with Ollama
+    provider = OllamaLLMProvider(base_url=settings.ollama_base_url, model_name=settings.ollama_model)
+    pipeline = PaperUnderstandingPipeline(persistence=layer, provider=provider, model_name=settings.ollama_model)
 
     response = pipeline.understand_paper(paper_id)
 

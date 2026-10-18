@@ -12,7 +12,8 @@ license = "MIT"
 dependencies = [
     "pydantic>=2.0,<3.0",
     "pydantic-settings>=2.0,<3.0",
-    "google-genai",
+    "requests>=2.31.0",
+    "faiss-cpu>=1.7.4",
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "sqlalchemy>=2.0.0,<3.0.0",
